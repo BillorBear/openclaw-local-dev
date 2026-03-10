@@ -1,0 +1,37 @@
+{
+  "id": "codex-dispatch",
+  "name": "Codex Dispatch",
+  "description": "Dispatch one-shot local Codex coding tasks from OpenClaw chat turns using project aliases.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "codexCommand": {
+        "type": "string"
+      },
+      "aliasesFile": {
+        "type": "string"
+      },
+      "defaultProject": {
+        "type": "string"
+      },
+      "timeoutSeconds": {
+        "type": "number",
+        "minimum": 1
+      },
+      "model": {
+        "type": "string"
+      },
+      "fullAuto": {
+        "type": "boolean"
+      },
+      "includeDiff": {
+        "type": "boolean"
+      },
+      "diffMaxBytes": {
+        "type": "number",
+        "minimum": 512
+      }
+    }
+  }
+}

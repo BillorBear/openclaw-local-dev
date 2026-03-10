@@ -1,0 +1,40 @@
+{
+  "acp": {
+    "enabled": true,
+    "dispatch": {
+      "enabled": true
+    },
+    "backend": "acpx",
+    "defaultAgent": "codex",
+    "allowedAgents": [
+      "pi",
+      "claude",
+      "codex",
+      "opencode",
+      "gemini",
+      "kimi"
+    ],
+    "maxConcurrentSessions": 8,
+    "stream": {
+      "coalesceIdleMs": 300,
+      "maxChunkChars": 1200
+    },
+    "runtime": {
+      "ttlMinutes": 120
+    }
+  },
+  "agents": {
+    "defaults": {
+      "cliBackends": {
+        "codex-cli": {
+          "command": "/opt/homebrew/bin/codex"
+        }
+      },
+      "model": {
+        "fallbacks": [
+          "codex-cli/gpt-5.3-codex"
+        ]
+      }
+    }
+  }
+}

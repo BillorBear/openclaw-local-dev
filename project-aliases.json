@@ -1,0 +1,9 @@
+{
+  "default": "backend-common",
+  "projects": {
+    "backend-common": "/Users/liuchunlin/Downloads/workSpace/develop/iflytek/xingchen_pro_webservice",
+    "backend-nanda": "/Users/liuchunlin/Downloads/workSpace/commercialization/astron-agent-enterprise",
+    "backend-github": "/Users/liuchunlin/Downloads/workSpace/open/astra-agent",
+    "backend-x": "/Users/liuchunlin/Downloads/workSpace/develop/iflytek/astron-agent-x"
+  }
+}
