@@ -49,6 +49,7 @@
    - changed files
    - git diff stat
    - 可选的 diff snippet
+   - 可选的结果截图 PNG
 
 它的优势是：
 
@@ -118,6 +119,8 @@ ACP_ALLOWED_AGENTS='["pi","claude","codex","opencode","gemini","kimi"]'
 PROJECT_ALIASES_FILE=/Users/liuchunlin/Downloads/workSpace/develop/openclaw/openclaw-local-dev/project-aliases.json
 CODEX_DISPATCH_TIMEOUT_SECONDS=900
 CODEX_DISPATCH_MODEL=
+CODEX_DISPATCH_RESULT_IMAGE=true
+CODEX_DISPATCH_RESULT_IMAGE_WIDTH=1400
 ```
 
 说明：
@@ -132,6 +135,10 @@ CODEX_DISPATCH_MODEL=
   单次 Codex 任务最大执行时间。
 - `CODEX_DISPATCH_MODEL`
   可选。如果不填，就用 Codex 自己的默认模型。
+- `CODEX_DISPATCH_RESULT_IMAGE`
+  是否默认生成结果截图 PNG。
+- `CODEX_DISPATCH_RESULT_IMAGE_WIDTH`
+  结果截图宽度，默认 `1400`。
 
 ### 2. 配置项目别名
 
@@ -176,6 +183,8 @@ chmod +x install.sh project-alias.sh
    - `aliasesFile`
    - `codexCommand`
    - `timeoutSeconds`
+   - `resultImage`
+   - `resultImageWidth`
 4. 写入 ACP baseline
 5. 写入 `codex-cli` backend 的绝对命令路径
 
@@ -218,6 +227,12 @@ openclaw --profile default config set 'agents.list[0].model' '"openai-codex/gpt-
 
 ```text
 用 codex 在 backend-x 里修复登录接口 500，按现有风格修改，最后给我 diff。
+```
+
+如果你希望顺带返回一张结构化结果截图，可以直接这样说：
+
+```text
+在 backend-common 里修复登录接口 500，直接改代码，完成后回我 changed files、diff、验证结果，并附一张结果截图。
 ```
 
 只要消息里带了你在 `project-aliases.json` 里配置的项目别名，主 agent 就应该优先调用 `codex_dispatch`，而不是继续追问项目路径。
@@ -322,6 +337,7 @@ openclaw --profile default config set 'agents.list[0].model' '"openai-codex/gpt-
 - 能看到进入工具执行后的日志
 - 如果是 Java 项目，可能会看到 `mvn` 相关执行
 - 最终返回 changed files、diff、验证结果
+- 如果开启了结果截图，还会返回 `Result image:` 和 PNG 文件路径
 
 ## 如何看执行进度
 
@@ -330,6 +346,14 @@ WebChat / 飞书里当前看不到细粒度的 Codex 内部进度，这是当前
 - `codex-dispatch` 是同步调用一次 `codex exec`
 - 工具会在任务完成后一次性把结果返回聊天
 - 所以聊天里通常只有“已收到”和“最终结果”
+
+当前的“结果截图”不是系统桌面截图，而是一张插件生成的结构化 PNG，内容包括：
+
+- 项目名
+- Codex 最终摘要
+- changed files
+- git diff stat
+- diff snippet
 
 真正的执行进度建议看日志：
 

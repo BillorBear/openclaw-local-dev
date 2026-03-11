@@ -9,6 +9,7 @@ const { spawn } = require("node:child_process");
 const TOOL_NAME = "codex_dispatch";
 const DEFAULT_TIMEOUT_SECONDS = 900;
 const DEFAULT_DIFF_MAX_BYTES = 12000;
+const DEFAULT_RESULT_IMAGE_WIDTH = 1400;
 
 function jsonSchema() {
   return {
@@ -40,9 +41,25 @@ function jsonSchema() {
         type: "boolean",
         description: "Whether to include a trimmed git diff snippet in the returned result.",
       },
+      resultImage: {
+        type: "boolean",
+        description:
+          "Whether to generate a PNG result snapshot that includes summary, changed files, validation, and diff snippets.",
+      },
     },
     required: ["task"],
   };
+}
+
+function shouldGenerateResultImage(task, explicitFlag, pluginConfig) {
+  if (typeof explicitFlag === "boolean") {
+    return explicitFlag;
+  }
+  if (typeof pluginConfig.resultImage === "boolean") {
+    return pluginConfig.resultImage;
+  }
+
+  return /截图|附图|screenshot|screen shot|result image|结果图/i.test(String(task || ""));
 }
 
 function loadAliases(filePath) {
@@ -294,7 +311,128 @@ function buildResultText(result) {
     parts.push(result.stderr);
   }
 
+  if (result.resultImage && result.resultImage.path) {
+    parts.push("");
+    parts.push("Result image:");
+    parts.push(result.resultImage.path);
+  }
+
   return parts.join("\n");
+}
+
+function buildResultImageText(result) {
+  const parts = [];
+  parts.push("Codex Result Snapshot");
+  parts.push(`Project: ${result.project}`);
+  parts.push(`Working directory: ${result.cwd}`);
+  parts.push("");
+  parts.push("Summary");
+  parts.push(result.finalMessage || "(empty)");
+
+  if (result.git && result.git.inRepo) {
+    parts.push("");
+    parts.push("Changed files");
+    parts.push(
+      result.git.changedFiles.length > 0
+        ? result.git.changedFiles.map((file) => `- ${file}`).join("\n")
+        : "- none detected",
+    );
+
+    if (result.git.diffStat) {
+      parts.push("");
+      parts.push("Git diff stat");
+      parts.push(result.git.diffStat);
+    }
+
+    if (result.git.diff) {
+      parts.push("");
+      parts.push("Git diff snippet");
+      parts.push(result.git.diff);
+    }
+  }
+
+  return parts.join("\n");
+}
+
+async function generateResultImage(params) {
+  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "openclaw-codex-result-image-"));
+  const scriptPath = path.join(tmpDir, "render.swift");
+  const textPath = path.join(tmpDir, "snapshot.txt");
+  const outputPath = path.join(tmpDir, "codex-result.png");
+
+  await fsp.writeFile(textPath, params.text.replace(/\r\n/g, "\n"), "utf8");
+  await fsp.writeFile(
+    scriptPath,
+    [
+      "import AppKit",
+      "import Foundation",
+      "",
+      "let textPath = CommandLine.arguments[1]",
+      "let outputPath = CommandLine.arguments[2]",
+      "let width = CGFloat(Int(CommandLine.arguments[3]) ?? 1400)",
+      "let text = (try? String(contentsOfFile: textPath, encoding: .utf8)) ?? \"\"",
+      "let font = NSFont.monospacedSystemFont(ofSize: 20, weight: .regular)",
+      "let paragraph = NSMutableParagraphStyle()",
+      "paragraph.lineBreakMode = .byWordWrapping",
+      "paragraph.lineSpacing = 6",
+      "let attrs: [NSAttributedString.Key: Any] = [",
+      "  .font: font,",
+      "  .foregroundColor: NSColor(calibratedWhite: 0.12, alpha: 1),",
+      "  .paragraphStyle: paragraph",
+      "]",
+      "let inset: CGFloat = 40",
+      "let textWidth = width - inset * 2",
+      "let attributed = NSAttributedString(string: text, attributes: attrs)",
+      "let measured = attributed.boundingRect(with: NSSize(width: textWidth, height: 100000), options: [.usesLineFragmentOrigin, .usesFontLeading])",
+      "let height = max(ceil(measured.height) + inset * 2, 320)",
+      "let size = NSSize(width: width, height: height)",
+      "let image = NSImage(size: size)",
+      "image.lockFocus()",
+      "NSColor(calibratedRed: 0.97, green: 0.98, blue: 1.0, alpha: 1).setFill()",
+      "NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()",
+      "let cardRect = NSRect(x: 20, y: 20, width: width - 40, height: height - 40)",
+      "let cardPath = NSBezierPath(roundedRect: cardRect, xRadius: 18, yRadius: 18)",
+      "NSColor.white.setFill()",
+      "cardPath.fill()",
+      "NSColor(calibratedWhite: 0.88, alpha: 1).setStroke()",
+      "cardPath.lineWidth = 1",
+      "cardPath.stroke()",
+      "attributed.draw(with: NSRect(x: inset, y: inset, width: textWidth, height: height - inset * 2), options: [.usesLineFragmentOrigin, .usesFontLeading])",
+      "image.unlockFocus()",
+      "if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {",
+      "  try png.write(to: URL(fileURLWithPath: outputPath))",
+      "  print(outputPath)",
+      "} else {",
+      "  fputs(\"failed to render image\\n\", stderr)",
+      "  exit(1)",
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const render = await runProcess(
+    "/usr/bin/swift",
+    [scriptPath, textPath, outputPath, String(params.width || DEFAULT_RESULT_IMAGE_WIDTH)],
+    {
+      cwd: tmpDir,
+      env: {
+        ...process.env,
+        CLANG_MODULE_CACHE_PATH: path.join(tmpDir, "clang-cache"),
+        SWIFT_MODULE_CACHE_PATH: path.join(tmpDir, "swift-cache"),
+      },
+      timeoutMs: 60000,
+    },
+  );
+
+  if (render.code !== 0) {
+    throw new Error(`result image render failed: ${(render.stderr || render.stdout).trim()}`);
+  }
+
+  return {
+    path: outputPath,
+    tempDir: tmpDir,
+  };
 }
 
 function createGuidance(api) {
@@ -381,9 +519,15 @@ function createPlugin() {
             typeof pluginConfig.diffMaxBytes === "number" && pluginConfig.diffMaxBytes >= 512
               ? Math.floor(pluginConfig.diffMaxBytes)
               : DEFAULT_DIFF_MAX_BYTES;
+          const resultImageEnabled = shouldGenerateResultImage(params.task, params.resultImage, pluginConfig);
+          const resultImageWidth =
+            typeof pluginConfig.resultImageWidth === "number" && pluginConfig.resultImageWidth >= 640
+              ? Math.floor(pluginConfig.resultImageWidth)
+              : DEFAULT_RESULT_IMAGE_WIDTH;
 
           const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "openclaw-codex-dispatch-"));
           const outputFile = path.join(tmpDir, "last-message.txt");
+          let imageArtifact = null;
 
           try {
             const args = ["exec", "--skip-git-repo-check", "-C", resolvedProject.cwd, "-o", outputFile];
@@ -427,6 +571,16 @@ function createPlugin() {
               stderr: proc.stderr.trim(),
               git: gitSummary,
             };
+
+            if (resultImageEnabled) {
+              imageArtifact = await generateResultImage({
+                text: buildResultImageText(result),
+                width: resultImageWidth,
+              });
+              result.resultImage = {
+                path: imageArtifact.path,
+              };
+            }
 
             return {
               content: [

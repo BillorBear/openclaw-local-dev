@@ -19,6 +19,8 @@ ACP_ALLOWED_AGENTS="${ACP_ALLOWED_AGENTS:-[\"pi\",\"claude\",\"codex\",\"opencod
 PROJECT_ALIASES_FILE="${PROJECT_ALIASES_FILE:-$ROOT_DIR/project-aliases.json}"
 CODEX_DISPATCH_TIMEOUT_SECONDS="${CODEX_DISPATCH_TIMEOUT_SECONDS:-900}"
 CODEX_DISPATCH_MODEL="${CODEX_DISPATCH_MODEL:-}"
+CODEX_DISPATCH_RESULT_IMAGE="${CODEX_DISPATCH_RESULT_IMAGE:-true}"
+CODEX_DISPATCH_RESULT_IMAGE_WIDTH="${CODEX_DISPATCH_RESULT_IMAGE_WIDTH:-1400}"
 
 if [[ -z "${OPENCLAW_CLI_PATH}" ]]; then
   echo "openclaw not found in PATH and OPENCLAW_CLI_PATH is empty"
@@ -55,6 +57,8 @@ echo "Installing local Codex dispatch plugin"
 "${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.aliasesFile' "\"${PROJECT_ALIASES_FILE}\"" --strict-json
 "${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.codexCommand' "\"${CODEX_CLI_PATH}\"" --strict-json
 "${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.timeoutSeconds' "${CODEX_DISPATCH_TIMEOUT_SECONDS}" --strict-json
+"${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.resultImage' "${CODEX_DISPATCH_RESULT_IMAGE}" --strict-json
+"${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.resultImageWidth' "${CODEX_DISPATCH_RESULT_IMAGE_WIDTH}" --strict-json
 if [[ -n "${CODEX_DISPATCH_MODEL}" ]]; then
   "${OPENCLAW_CLI_PATH}" --profile "${OPENCLAW_PROFILE}" config set 'plugins.entries["codex-dispatch"].config.model' "\"${CODEX_DISPATCH_MODEL}\"" --strict-json
 fi
